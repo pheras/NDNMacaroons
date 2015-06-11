@@ -1,0 +1,17 @@
+# -*- Mode: python; py-indent-offset: 4; indent-tabs-mode: nil; coding: utf-8; -*-
+
+top = '..'
+
+def build(bld):
+    # List all directories files (example can has multiple .cpp in the directory)
+    for name in bld.path.ant_glob(['*'], dir=True, src=False):
+        bld(features=['cxx', 'cxxprogram'],
+            target="../bin/%s/%s" % (name, name),
+            source=bld.path.ant_glob(['%s/**/*.cpp' % name, '%s/**/*.cc' % name]),
+            libpath=['/usr/lib', '/usr/local/lib'],
+            lib=['macaroons', 'NDNMacaroon', 'protobuf'],
+            use='NDN_CXX BOOST NDNMACAROON macaroons NDNMacaroon',
+            install_path=None,
+            includes='%s' % name,
+            )
+

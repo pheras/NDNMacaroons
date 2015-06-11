@@ -1,0 +1,20 @@
+package macaroons;
+
+
+message e_macaroon {
+
+  required string macaroon = 1;
+
+  message Endorsement
+  {	
+
+    required string	     kind     = 1;
+    required string          name     = 2;
+    required string 	     certname = 3;
+    required string 	     hash     = 4;
+  }
+
+  repeated Endorsement endorsements = 2;
+}
+
+
