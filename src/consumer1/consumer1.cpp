@@ -14,6 +14,9 @@
 
 const unsigned NUM_RETRIES = 20;
 
+const std::string KEYNAMES_FILE="./keys.txt";
+
+
 // Enclosing code in ndn simplifies coding (can also use `using namespace ndn`)
 namespace ndn {
   // Additional nested namespace could be used to prevent/limit name contentions
@@ -28,6 +31,12 @@ namespace ndn {
 
       Consumer()
       {
+        loadKeyNames();
+
+        std::cout << "Loaded" << std::endl; 
+
+        const std::string CONSUMER1_KSK_NAME = m_princKeyNames[CONSUMER1_KSK];
+
 	//     0          1            2        3     4
 	// /example/thirdParty/setSharedSecret/id/encryptedSharedSecret
 	Name interestName("/example/thirdParty/setSharedSecret");
@@ -43,7 +52,8 @@ namespace ndn {
 	ndn::Name session_key_name(hint_shared_key_third_party);
 	const unsigned SESSION_KEY_SIZE = 32; // is 32 bytes enough. Check it.
 	// public key of third party
-	ndn::Name public_key_name("/ndn/keys/karen/dsk-1428573423700");
+        const std::string THIRD_PARTY_DSK_NAME = m_princKeyNames[THIRD_PARTY_DSK];
+	ndn::Name public_key_name(THIRD_PARTY_DSK_NAME);
 	ndn::ConstBufferPtr enc_session_key = 
 	  macaroons::generateSessionKey(public_key_name, session_key_name, SESSION_KEY_SIZE);
 	  
@@ -56,7 +66,7 @@ namespace ndn {
 	newInterest.setInterestLifetime(time::milliseconds(1000));
 	newInterest.setMustBeFresh(true);
 
-	m_keyChain.sign(newInterest, m_keyChain.getDefaultCertificateNameForKey("/ndn/keys/alice/ksk-1427110059198"));
+	m_keyChain.sign(newInterest, m_keyChain.getDefaultCertificateNameForKey(CONSUMER1_KSK_NAME));
 	  
 	unsigned retries = NUM_RETRIES;        
 	m_face.expressInterest
@@ -78,7 +88,10 @@ namespace ndn {
       {
         // Generate session key
         const unsigned SESSION_KEY_SIZE = 32; // is 32 bytes enough. Check it.
-        ndn::Name public_key_name("/ndn/keys/bob/dsk-1428573298310");
+        const std::string PRODUCER_DSK_NAME = m_princKeyNames[PRODUCER_DSK];
+        const std::string CONSUMER1_KSK_NAME = m_princKeyNames[CONSUMER1_KSK];
+        ndn::Name public_key_name(PRODUCER_DSK_NAME);
+
         session_key_name =  Name("/session-key-consumer1-producer");
         ndn::ConstBufferPtr enc_session_key =
           macaroons::generateSessionKey(public_key_name, session_key_name, SESSION_KEY_SIZE);
@@ -93,9 +106,7 @@ namespace ndn {
         interest.setMustBeFresh(true);
 
         // sign interest
-        // m_keyChain.setDefaultKeyNameForIdentity("/ndn/keys/alice/ksk-1427110059198");
-        // m_keyChain.signByIdentity(interest, Name("/ndn/keys/alice"));
-	m_keyChain.sign(interest, m_keyChain.getDefaultCertificateNameForKey("/ndn/keys/alice/ksk-1427110059198"));
+	m_keyChain.sign(interest, m_keyChain.getDefaultCertificateNameForKey(CONSUMER1_KSK_NAME));
 
         unsigned retries = NUM_RETRIES; 
         m_face.expressInterest(interest,
@@ -109,6 +120,51 @@ namespace ndn {
       }
 
     private:
+
+      enum princEnum_t {PRODUCER_KSK, PRODUCER_DSK, 
+                        CONSUMER1_KSK, CONSUMER1_DSK,
+                        THIRD_PARTY_KSK, THIRD_PARTY_DSK};
+      std::map<princEnum_t, std::string> m_princKeyNames;
+
+      void
+      loadKeyNames() 
+      {
+         std::ifstream is(KEYNAMES_FILE.c_str());
+         std::string line;
+         if (is.is_open()) {
+
+            std::getline(is, line);
+            m_princKeyNames[PRODUCER_KSK] = line;
+            std::cout << "PRODUCER_KSK = " << m_princKeyNames[PRODUCER_KSK] << std::endl;
+
+            std::getline(is, line);
+            m_princKeyNames[PRODUCER_DSK] = line;
+            std::cout << "PRODUCER_DSK = " << m_princKeyNames[PRODUCER_DSK] << std::endl;
+
+            std::getline(is, line);
+            m_princKeyNames[CONSUMER1_KSK] = line;
+            std::cout << "CONSUMER1_KSK = " << m_princKeyNames[CONSUMER1_KSK] << std::endl;
+
+            std::getline(is, line);
+            m_princKeyNames[CONSUMER1_DSK] = line;
+            std::cout << "CONSUMER1_DSK = " << m_princKeyNames[CONSUMER1_DSK] << std::endl;
+
+            // skip consumer2 lines
+            std::getline(is, line);
+            std::getline(is, line);
+  
+            std::getline(is, line);
+            m_princKeyNames[THIRD_PARTY_KSK] = line;
+            std::cout << "THIRD_PARTY_KSK = " << m_princKeyNames[THIRD_PARTY_KSK] << std::endl;
+
+            std::getline(is, line);
+            m_princKeyNames[THIRD_PARTY_DSK] = line;
+            std::cout << "THIRD_PARTY_DSK = " << m_princKeyNames[THIRD_PARTY_DSK] << std::endl;
+
+            is.close();
+         }
+      }
+
       void
       onSetSharedSecretData(const Interest& interest, const Data& data)
       {
@@ -232,11 +288,12 @@ namespace ndn {
 	  // 2. ksk producer endorsement == (type, name, certname, hash)
 	  {
 	    macaroons::e_macaroon::Endorsement* endorsement = e_macaroon.add_endorsements();
+            const std::string PRODUCER_KSK_NAME = m_princKeyNames[PRODUCER_KSK];
 
 	    std::cout<<">>>>"<<std::endl;
-	    //	    m_keyChain.setDefaultKeyNameForIdentity("/ndn/keys/bob/dsk-1428573298310");
+
 	    shared_ptr<IdentityCertificate> cert = 
-	      m_keyChain.getCertificate(m_keyChain.getDefaultCertificateNameForKey(ndn::Name("/ndn/keys/bob/ksk-1428573187822")));
+	      m_keyChain.getCertificate(m_keyChain.getDefaultCertificateNameForKey(ndn::Name(PRODUCER_KSK_NAME)));
 	    std::cout<<">>>>"<<std::endl;
 	    std::stringstream ss;
 	    {
@@ -257,11 +314,12 @@ namespace ndn {
 	  // 3. dsk producer endorsement == (type, name, certname, hash)
 	  {
 	    macaroons::e_macaroon::Endorsement* endorsement = e_macaroon.add_endorsements();
+            const std::string PRODUCER_DSK_NAME = m_princKeyNames[PRODUCER_DSK];
 
 	    std::cout<<">>>>"<<std::endl;
-	    //	    m_keyChain.setDefaultKeyNameForIdentity("/ndn/keys/bob/dsk-1428573298310");
+
 	    shared_ptr<IdentityCertificate> cert = 
-	      m_keyChain.getCertificate(m_keyChain.getDefaultCertificateNameForKey(ndn::Name("/ndn/keys/bob/dsk-1428573298310")));
+	      m_keyChain.getCertificate(m_keyChain.getDefaultCertificateNameForKey(ndn::Name(PRODUCER_DSK_NAME)));
 	    std::cout<<">>>>"<<std::endl;
 	    std::stringstream ss;
 	    {
@@ -285,8 +343,9 @@ namespace ndn {
 	  // We should add one third party endorsement for each third party caveat in newM
 	  {
 	    macaroons::e_macaroon::Endorsement* endorsement = e_macaroon.add_endorsements();
+            const std::string THIRD_PARTY_KSK_NAME = m_princKeyNames[THIRD_PARTY_KSK];
 	    shared_ptr<IdentityCertificate> cert = 
-	      m_keyChain.getCertificate(m_keyChain.getDefaultCertificateNameForKey(ndn::Name("/ndn/keys/karen/ksk-1428573427553")));
+	      m_keyChain.getCertificate(m_keyChain.getDefaultCertificateNameForKey(ndn::Name(THIRD_PARTY_KSK_NAME)));
 	    std::stringstream ss;
 	    {
 	      using namespace CryptoPP;
@@ -310,10 +369,11 @@ namespace ndn {
 	  // 5. dsk third party endorsement == (type, name, certname, hash)
 	  {
 	    macaroons::e_macaroon::Endorsement* endorsement = e_macaroon.add_endorsements();
+            const std::string THIRD_PARTY_DSK_NAME = m_princKeyNames[THIRD_PARTY_DSK];
 
 	    std::cout<<">>>>"<<std::endl;
 	    shared_ptr<IdentityCertificate> cert = 
-	      m_keyChain.getCertificate(m_keyChain.getDefaultCertificateNameForKey(ndn::Name("/ndn/keys/karen/dsk-1428573423700")));
+	      m_keyChain.getCertificate(m_keyChain.getDefaultCertificateNameForKey(ndn::Name(THIRD_PARTY_DSK_NAME)));
 	    std::cout<<">>>>"<<std::endl;
 	    std::stringstream ss;
 	    {
@@ -354,9 +414,8 @@ namespace ndn {
 	  e_macaroon.SerializeToOstream(&os);
 	  data->setContent(os.buf());
 
-	  // m_keyChain.setDefaultKeyNameForIdentity("/ndn/keys/alice/ksk-1427110059198");
-	  // m_keyChain.signByIdentity(*data, Name("/ndn/keys/alice"));
-	  m_keyChain.sign(*data, m_keyChain.getDefaultCertificateNameForKey("/ndn/keys/alice/ksk-1427110059198"));
+          const std::string CONSUMER1_KSK_NAME = m_princKeyNames[CONSUMER1_KSK];
+	  m_keyChain.sign(*data, m_keyChain.getDefaultCertificateNameForKey(CONSUMER1_KSK_NAME));
 
 	  std::cout << ">> D: " << *data << std::endl;
 	  m_face.put(*data);
