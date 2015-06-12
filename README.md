@@ -24,12 +24,14 @@ To build `NDNMacaroons` library run the following commands from
     ./waf configure
     ./waf
     ./waf install
+    ldconfig
   
 To build `NDNMacaroons` examples run the following commands from 
 `NDNMacaroons/` folder:
 
     ./waf configure
     ./waf
+
 
 ### Run the example
 
