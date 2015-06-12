@@ -41,10 +41,11 @@ First, create DSK/KSK keys required to run this example. From `NDNMacaroons/` fo
     ./createKeys.sh
 
 Run each principal, each one in a different terminal, from `NDNMacaroons/` folder:
-    ./build/bin/producer/producer
-    ./build/bin/third-party/third-party
-    ./build/bin/consumer1/consumer1
-    ./build/bin/consumer2/consumer2
+
+    1) Producer:                  ./build/bin/producer/producer
+    2) Third Party Authenticator: ./build/bin/third-party/third-party
+    3) Consumer1:                 ./build/bin/consumer1/consumer1
+    4) Consumer2:                 ./build/bin/consumer2/consumer2
 
    
    
