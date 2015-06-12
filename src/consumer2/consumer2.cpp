@@ -16,6 +16,8 @@
 
 
 const unsigned NUM_RETRIES = 1;
+const std::string KEYNAMES_FILE="./keys.txt";
+
 
 // Enclosing code in ndn simplifies coding (can also use `using namespace ndn`)
 namespace ndn {
@@ -26,6 +28,11 @@ namespace ndn {
     class Consumer : noncopyable
     {
     public:
+
+      Consumer() {
+         loadKeyNames();
+      }
+
       void
       run()
       {
@@ -49,6 +56,35 @@ namespace ndn {
 
     private:
 
+
+      enum princEnum_t {CONSUMER2_KSK, CONSUMER2_DSK,
+                        THIRD_PARTY_KSK, THIRD_PARTY_DSK};
+      std::map<princEnum_t, std::string> m_princKeyNames;
+
+      void
+      loadKeyNames()
+      {
+         std::ifstream is(KEYNAMES_FILE.c_str());
+         std::string line;
+         if (is.is_open()) {
+
+            // skip lines producer, consumer1
+            for (int i =0; i<=3; i++) {
+               std::getline(is, line);
+            }
+            std::getline(is, line);
+            m_princKeyNames[CONSUMER2_KSK] = line;
+            std::cout << "CONSUMER2_KSK = " << m_princKeyNames[CONSUMER2_KSK] << std::endl;
+
+            std::getline(is, line);
+            m_princKeyNames[CONSUMER2_DSK] = line;
+            std::cout << "CONSUMER2_DSK = " << m_princKeyNames[CONSUMER2_DSK] << std::endl;
+
+            is.close();
+         }
+       }
+
+
       void
       macaroonReadyForRequest(shared_ptr<macaroons::NDNMacaroon> M)
       {
@@ -62,7 +98,6 @@ namespace ndn {
 
 	std::cout << "M->getLocation() " << M->getLocation() << std::endl;
 	ndn::Name public_key_name(secureChannels[M->getLocation()]);
-	//        ndn::Name public_key_name("/ndn/keys/bob/dsk-1428573298310");
 	ndn::Name session_key_name =  Name("/session-key-consumer2-producer");
         ndn::ConstBufferPtr enc_session_key =
           macaroons::generateSessionKey(public_key_name, session_key_name, SESSION_KEY_SIZE);
@@ -198,7 +233,6 @@ namespace ndn {
 	  std::cout << "processing third party: " << third_party_location << std::endl;
 
 	  ndn::Name public_key_name(secureChannels[third_party_location]);
-	  //ndn::Name public_key_name("/ndn/keys/karen/dsk-1428573423700");
 	  ndn::Name session_key_name(std::string("/session-key-consumer") + std::string("-") + std::to_string(i));
 	  const unsigned SESSION_KEY_SIZE = 32; // is 32 bytes enough. Check it.
 	  ndn::ConstBufferPtr enc_session_key = 
@@ -216,9 +250,8 @@ namespace ndn {
 	  newInterest.setMustBeFresh(true);
 
 	  // sign interest
-	  // m_keyChain.setDefaultKeyNameForIdentity("/ndn/keys/jim/ksk-1428573527782");
-	  // m_keyChain.signByIdentity(newInterest, Name("/ndn/keys/jim"));
-	  m_keyChain.sign(newInterest, m_keyChain.getDefaultCertificateNameForKey("/ndn/keys/jim/ksk-1428573527782"));
+          const std::string CONSUMER2_KSK_NAME = m_princKeyNames[CONSUMER2_KSK];
+	  m_keyChain.sign(newInterest, m_keyChain.getDefaultCertificateNameForKey(ndn::Name(CONSUMER2_KSK_NAME)));
 	  
 	  
 	  unsigned retries = NUM_RETRIES;        
