@@ -36,3 +36,15 @@ There are 4 principals:
                 Gets discharge macaroon from Third Party and sends macaroon and discharge macaroon to Producer in order to access data.
    - Third Party: provides discharge macaroon to principals.
    
+First, create DSK/KSK keys required to run this example. From `NDNMacaroons/` folder:
+
+    ./createKeys.sh
+
+Run each principal, each one in a different terminal, from `NDNMacaroons/` folder:
+    ./build/bin/producer/producer
+    ./build/bin/third-party/third-party
+    ./build/bin/consumer1/consumer1
+    ./build/bin/consumer2/consumer2
+
+   
+   
