@@ -1,6 +1,9 @@
 #include <set>
 #include <string>
 
+#include <boost/regex.hpp>
+
+
 #include <ndn-cxx/face.hpp>
 #include <ndn-cxx/security/key-chain.hpp>
 #include <ndn-cxx/security/cryptopp.hpp>
@@ -10,6 +13,10 @@
 
 #include <NDNMacaroon/macaroon.hpp>
 #include <NDNMacaroon/macaroon-utils.hpp>
+
+
+
+const std::string KEYNAMES_FILE="./keys.txt";
 
 
 /************** Macaroon declarations ****************/
@@ -77,8 +84,10 @@ namespace ndn {
       ThirdParty(): m_validator(m_face)
       {
 
+        loadKeyNames();
+
 	// Fill table of authenticator
-	keyNameToUser["/ndn/keys/jim/ksk-1428573527782"] = "jim";
+	keyNameToUser[m_princKeyNames[CONSUMER2_KSK]] = "jim";
 	groupNameToUsers["friendsOfAlice"].insert("jim");
 	groupNameToUsers["friendsOfJuly"].insert("jim");
 
@@ -104,7 +113,7 @@ namespace ndn {
                                  bind(&ThirdParty::onInterest, this, _1, _2),
                                  RegisterPrefixSuccessCallback(),
                                  bind(&ThirdParty::onRegisterFailed, this, _1, _2));
-	m_face.setInterestFilter("/ndn/keys/karen",
+	m_face.setInterestFilter(m_thirdPartyIdentity,
 				 bind(&ThirdParty::onKeyInterest, this, _1, _2),
 				 RegisterPrefixSuccessCallback(),
 				 bind(&ThirdParty::onRegisterFailed, this, _1, _2));
@@ -117,6 +126,8 @@ namespace ndn {
         m_face.processEvents();
       }
 
+   private:
+
       enum {
         // 0 --> /example
         // 1 --> /thirdParty
@@ -126,7 +137,54 @@ namespace ndn {
         SESSION_KEY_POS = 5
       };
 
-    private:
+
+      enum princEnum_t {CONSUMER2_KSK, CONSUMER2_DSK,
+                        THIRD_PARTY_KSK, THIRD_PARTY_DSK};
+
+      std::map<princEnum_t, std::string> m_princKeyNames;
+      std::string m_thirdPartyIdentity;
+
+      void
+      loadKeyNames()
+      {
+         std::ifstream is(KEYNAMES_FILE.c_str());
+         std::string line;
+         if (is.is_open()) {
+            // skip producer, consumer1 lines
+            for (int i=0; i<4; i++) {
+                std::getline(is, line);
+            }
+
+
+            std::getline(is, line);
+            m_princKeyNames[CONSUMER2_KSK] = line;
+            std::cout << "CONSUMER2_KSK = " << m_princKeyNames[CONSUMER2_KSK] << std::endl;
+
+            std::getline(is, line);
+            m_princKeyNames[CONSUMER2_DSK] = line;
+            std::cout << "CONSUMER2_DSK = " << m_princKeyNames[CONSUMER2_DSK] << std::endl;
+
+            std::getline(is, line);
+            m_princKeyNames[THIRD_PARTY_KSK] = line;
+            std::cout << "THIRD_PARTY_KSK = " << m_princKeyNames[THIRD_PARTY_KSK] << std::endl;
+
+            std::getline(is, line);
+            m_princKeyNames[THIRD_PARTY_DSK] = line;
+            std::cout << "THIRD_PARTY_DSK = " << m_princKeyNames[THIRD_PARTY_DSK] << std::endl;
+
+            is.close();
+
+            boost::regex identity("(.*)/dsk-(.*)");
+            boost::cmatch matches;
+
+            if (boost::regex_match(line.c_str(), matches, identity)) {
+                 m_thirdPartyIdentity = matches[1];
+            }
+            std::cout << "third party identity = " << m_thirdPartyIdentity << std::endl;
+
+        } 
+      }
+
       void
       getSessionKeyFromInterest(const shared_ptr <const Interest>& interest,
                     const unsigned sessionKeyPos,
@@ -139,8 +197,8 @@ namespace ndn {
         // Get session_key from interestName
         ndn::name::Component encrypted_session_key = interest->getName().at(sessionKeyPos);
 
-        // Decrypt session_key sent by consummer, using karen private key
-        ndn::Name pub_key_name("/ndn/keys/karen/dsk-1428573423700");
+        // Decrypt session_key sent by consummer, using Third Party private key
+        ndn::Name pub_key_name(m_princKeyNames[THIRD_PARTY_DSK]);
         ndn::ConstBufferPtr session_key_bits =
           m_secTpmFile.decryptInTpm(encrypted_session_key.value(),
                                     encrypted_session_key.value_size(),
@@ -182,7 +240,7 @@ namespace ndn {
       void
       onKeyInterest(const InterestFilter& filter, const Interest& interest)
       {
-	Name keyName = ndn::Name("/ndn/keys/karen/" + interest.getName().at(4).toUri());
+	Name keyName = ndn::Name(m_thirdPartyIdentity + "/" + interest.getName().at(4).toUri());
 	std::cout << "<< I Certificate: " << interest << std::endl;
 
 	try {
@@ -215,7 +273,7 @@ namespace ndn {
            return;
 
 
-        std::cout << "Validating interest..." << std::endl;
+        std::cout << "Validating interest: getDischargeMacaroon..." << std::endl;
         m_validator.validate(interest,
                              bind(&ThirdParty::onValidatedgetDischargeMacaroon, this, _1),
                              bind(&ThirdParty::onValidationFailed, this, _1, _2));
@@ -306,7 +364,7 @@ namespace ndn {
 	data->setName(dataName);
 	data->setFreshnessPeriod(time::seconds(2));
         // Sign Data packet with default identity
-	m_keyChain.sign(*data, m_keyChain.getDefaultCertificateNameForKey("/ndn/keys/karen/ksk-1428573427553"));
+	m_keyChain.sign(*data, m_keyChain.getDefaultCertificateNameForKey(m_princKeyNames[THIRD_PARTY_KSK]));
         m_face.put(*data);
 
       }// onValidatedSetSharedSecret
@@ -402,10 +460,8 @@ namespace ndn {
 	data->setName(dataName);
 	data->setFreshnessPeriod(time::seconds(2));
 
-        // Sign Data packet with default identity
-	// m_keyChain.setDefaultKeyNameForIdentity("/ndn/keys/karen/ksk-1428573427553");
-	// m_keyChain.signByIdentity(*data, Name("/ndn/keys/karen"));
-	m_keyChain.sign(*data, m_keyChain.getDefaultCertificateNameForKey("/ndn/keys/karen/ksk-1428573427553"));
+        // Sign Data packet with third party identity
+	m_keyChain.sign(*data, m_keyChain.getDefaultCertificateNameForKey(m_princKeyNames[THIRD_PARTY_KSK]));
 
         // Return Data packet to the requester
         std::cout << ">> D: " << *data << std::endl;
