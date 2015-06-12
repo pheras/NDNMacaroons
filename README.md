@@ -23,8 +23,8 @@ To build `NDNMacaroons` library run the following commands from
     cd libNDNMacaroon
     ./waf configure
     ./waf
-    ./waf install
-    ldconfig
+    sudo ./waf install
+    sudo ldconfig
   
 To build `NDNMacaroons` examples run the following commands from 
 `NDNMacaroons/` folder:
