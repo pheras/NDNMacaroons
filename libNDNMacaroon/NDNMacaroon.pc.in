@@ -1,0 +1,10 @@
+prefix=@PREFIX@
+libdir=@LIBDIR@
+includedir=@INCLUDEDIR@
+
+Name: NDNMacaroon
+Description: NDNMacaroon library
+Version: @VERSION@
+Libs: -L${libdir} -lNDNMacaroon
+Cflags: -I${includedir}
+
