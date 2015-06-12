@@ -11,6 +11,9 @@
 #include <map>
 
 
+const std::string KEYNAMES_FILE="./keys.txt";
+
+
 /************** Macaroon related declarations ****************/
 namespace macaroons{
 
@@ -173,6 +176,7 @@ namespace ndn {
       Producer()
         : m_validator(m_face)
       {
+        loadKeyNames();
 
         try {
           std::cout << "OPEN File= " << FILENAME << std::endl;
@@ -190,6 +194,24 @@ namespace ndn {
       {
       }
 
+      void
+      run()
+      {
+        m_face.setInterestFilter(PRODUCER_PREFIX,
+                                 bind(&Producer::onInterest, this, _1, _2),
+                                 RegisterPrefixSuccessCallback(),
+                                 bind(&Producer::onRegisterFailed, this, _1, _2));
+
+	m_face.setInterestFilter(m_producerIdentity,
+	 			 bind(&Producer::onKeyInterest, this, _1, _2),
+	 			 RegisterPrefixSuccessCallback(),
+	 			 bind(&Producer::onRegisterFailed, this, _1, _2));
+	
+        m_face.processEvents();
+      }
+
+    private:
+
       enum {
         // 0  --> /example
         // 1  --> /producer
@@ -201,29 +223,43 @@ namespace ndn {
         INTEREST_SIG_INFO   = -2
       };
 
-      const std::string LOCATION = "/example/producer";
+
+      std::string m_producerIdentity;
+      enum princEnum_t {PRODUCER_KSK, PRODUCER_DSK};
+      std::map<princEnum_t, std::string> m_princKeyNames;
+      const std::string PRODUCER_PREFIX = "/example/producer";
 
       void
-      run()
+      loadKeyNames()
       {
-        m_face.setInterestFilter(LOCATION,
-                                 bind(&Producer::onInterest, this, _1, _2),
-                                 RegisterPrefixSuccessCallback(),
-                                 bind(&Producer::onRegisterFailed, this, _1, _2));
+         std::ifstream is(KEYNAMES_FILE.c_str());
+         std::string line;
+         if (is.is_open()) {
+            std::getline(is, line);
+            m_princKeyNames[PRODUCER_KSK] = line;
+            std::cout <<  " PRODUCER_KSK = " << m_princKeyNames[PRODUCER_KSK] << std::endl;
 
-	m_face.setInterestFilter("/ndn/keys/bob",
-	 			 bind(&Producer::onKeyInterest, this, _1, _2),
-	 			 RegisterPrefixSuccessCallback(),
-	 			 bind(&Producer::onRegisterFailed, this, _1, _2));
-	
-        m_face.processEvents();
+            std::getline(is, line);
+            m_princKeyNames[PRODUCER_DSK] = line;
+            std::cout <<  " PRODUCER_DSK = " << m_princKeyNames[PRODUCER_DSK] << std::endl;
+
+            is.close();
+
+            boost::regex identity("(.*)/dsk-(.*)");
+            boost::cmatch matches;
+
+            if (boost::regex_match(line.c_str(), matches, identity)) {
+                 m_producerIdentity = matches[1];
+            }
+            std::cout << "producer identity = " << m_producerIdentity << std::endl;
+         }
       }
 
-    private:
+
       void
       onKeyInterest(const InterestFilter& filter, const Interest& interest)
       {
-	Name keyName = ndn::Name("/ndn/keys/bob/" + interest.getName().at(4).toUri());
+	Name keyName = ndn::Name(m_producerIdentity + "/" + interest.getName().at(4).toUri());
 
 	std::cout << keyName << std::endl;
 
@@ -234,8 +270,6 @@ namespace ndn {
 	  // Create Data packet
 	  shared_ptr<IdentityCertificate> cert = 
 	    m_keyChain.getCertificate(m_keyChain.getDefaultCertificateNameForKey(keyName));
-	    //	    m_keyChain.getCertificate(m_keyChain.getDefaultCertificateNameForKey("/ndn/keys/bob/ksk-1428573187822"));
-
 
 	  // Return Data packet to the requester
 	  //std::cout << ">> CERTIFICATE: " << *cert << std::endl;
@@ -251,6 +285,7 @@ namespace ndn {
       onInterest(const InterestFilter& filter, const Interest& interest)
       {
         ndn::SecTpmFileEnc m_secTpmFile;
+        const std::string PRODUCER_KSK_NAME = m_princKeyNames[PRODUCER_KSK];
         
         std::string content;
         Name interestName = interest.getName();
@@ -375,9 +410,7 @@ namespace ndn {
           data->setFreshnessPeriod(time::seconds(0));
           data->setContent(reinterpret_cast<const uint8_t*>(content.c_str()), content.size());
 
-	  // m_keyChain.setDefaultKeyNameForIdentity("/ndn/keys/bob/ksk-1428573187822");
-	  // m_keyChain.signByIdentity(*data, Name("/ndn/keys/bob"));
-	  m_keyChain.sign(*data, m_keyChain.getDefaultCertificateNameForKey("/ndn/keys/bob/ksk-1428573187822"));
+	  m_keyChain.sign(*data, m_keyChain.getDefaultCertificateNameForKey(PRODUCER_KSK_NAME));
 
           std::cout << ">> D: " << *data << std::endl;
           m_face.put(*data);
@@ -402,12 +435,13 @@ namespace ndn {
                     const Name session_key_name)
       {
         ndn::SecTpmFileEnc m_secTpmFile;
+        const std::string PRODUCER_DSK_NAME = m_princKeyNames[PRODUCER_DSK];
 
         // Get session_key from interestName
         ndn::name::Component encrypted_session_key = interest->getName().at(sessionKeyPos);
 
-        // Decrypt session_key sent by consummer, using bob private key
-        ndn::Name pub_key_name("/ndn/keys/bob/dsk-1428573298310");
+        // Decrypt session_key sent by consummer, using Producer private key
+        ndn::Name pub_key_name(PRODUCER_DSK_NAME);
         ndn::ConstBufferPtr session_key_bits =
           m_secTpmFile.decryptInTpm(encrypted_session_key.value(),
                                     encrypted_session_key.value_size(),
@@ -426,6 +460,7 @@ namespace ndn {
       onValidated(const shared_ptr<const Interest>& interest)
       {
         ndn::SecTpmFileEnc m_secTpmFile;
+        const std::string PRODUCER_KSK_NAME = m_princKeyNames[PRODUCER_KSK];
 
         std::cout << "Validated INTEREST -> Generating macaroon" << std::endl;
 
@@ -434,7 +469,7 @@ namespace ndn {
 
  
         // Create macaroon
-        std::shared_ptr<macaroons::NDNMacaroon> M = macaroons::create_macaroon(LOCATION, 
+        std::shared_ptr<macaroons::NDNMacaroon> M = macaroons::create_macaroon(PRODUCER_PREFIX, 
                                                                                &m_secTpmFile);
         std::cout << ">>>" << std::endl;
 
@@ -460,7 +495,7 @@ namespace ndn {
         data->setContent(encrypted_serialized_macaroon);
 
         // Sign data packet
-	m_keyChain.sign(*data, m_keyChain.getDefaultCertificateNameForKey("/ndn/keys/bob/ksk-1428573187822"));
+	m_keyChain.sign(*data, m_keyChain.getDefaultCertificateNameForKey(PRODUCER_KSK_NAME));
 	
         std::cout << ">> D: " << *data << std::endl;
         m_face.put(*data);
