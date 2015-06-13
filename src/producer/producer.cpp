@@ -427,7 +427,9 @@ namespace examples {
     private:
 
       // Interest Name:
-      // /example/producer/COMMAND/SESSION_KEY/MACAROON/INTEREST_SIG_VALUE/INTEREST_SIG_INFO
+      // /example/producer/<COMMAND>/<SESSION_KEY>/<MACAROON>/<INTEREST_SIG_VALUE>/<INTEREST_SIG_INFO>
+
+      const std::string PRODUCER_PREFIX = "/example/producer";
 
       enum {
         // 0  --> /example
@@ -442,11 +444,9 @@ namespace examples {
 
       enum princEnum_t {PRODUCER_KSK, PRODUCER_DSK};
 
-      const std::string PRODUCER_PREFIX = "/example/producer";
-
       // m_producerIdentity is extracted from KEYNAMES_FILENAME
       std::string m_producerIdentity;
-      // m_princKeyNames: principal kenames are extracted from KEYNAMES_FILENAME
+      // m_princKeyNames: principal keynames are extracted from KEYNAMES_FILENAME
       std::map<princEnum_t, std::string> m_princKeyNames;
 
       // Macaroon is created from secret: Map <macaroonId, secret>
