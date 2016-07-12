@@ -12,7 +12,7 @@ Required:
 
 * [ndn-cxx and its dependencies](http://named-data.net/doc/ndn-cxx/)
 * Boost libraries
-* libmacaroons: https://github.com/rescrv/libmacaroons
+* libmacaroons: https://github.com/rescrv/libmacaroons (cython)
 * [protobuf] (https://github.com/google/protobuf)
 
 
